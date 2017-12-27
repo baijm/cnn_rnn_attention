@@ -1,4 +1,5 @@
 .idea/
+checkpoints/
 data_overlap_feature_single_att1_loss/
 module_overlap_feature_single_att1_loss.py
 symbol_overlap_feature_single_att1_loss_bjm.py

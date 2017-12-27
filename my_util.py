@@ -184,3 +184,31 @@ def gen_windows(img, window_sizes, window_strides, crop_central=True):
                 res.append(Image.fromarray(crop))
 
     return res
+
+
+def get_last_epoch(model_dir, prefix):
+    """ get the last epoch with the specified prefix
+    Parameters
+    ----------------------------------
+    model_dir : str
+        where models (checkpoints) are saved
+    prefix : str
+        distinguish between models of different runs
+
+    Return
+    ----------------------------------
+    int specifying epoch of the latest model, or -1 if there are no matching checkpoints
+    """
+
+    all_files = os.listdir(model_dir)
+    model_epochs = []
+    for f in all_files:
+        if f.endswith(".params") and f.startswith(prefix):
+            f = f.replace(".params", "")
+            num = f.split("-")[-1]
+            model_epochs.append(int(num))
+
+    if len(model_epochs) == 0:
+        return -1
+    else:
+        return max(model_epochs)
