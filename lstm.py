@@ -202,14 +202,10 @@ class LSTM(object):
             num_outputs=seq_len,
             squeeze_axis=1
         )
-        """
-        queeze_axis=1 removes the axis with length 1 from the shapes of the output arrays.
-        setting squeeze_axis to 1 removes axis with length 1 only along the axis which it is split.
-        """
 
         hidden_all = []
         for seqidx in range(seq_len):
-            hidden = wordvec[seqidx]
+            hidden = wordvec[seqidx] # 1, 4096
 
             # stack LSTM
             for i in range(num_rnn_layer):

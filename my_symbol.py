@@ -184,8 +184,7 @@ def get_cnn_rnn_attention(
         for_training,
         rnn_dropout,
         rnn_hidden,
-        rnn_window, # time steps ?
-        **kargs):
+        rnn_window):
     """ get model with CNN + RNN + attention
     Parameters
     ----------------------------
@@ -229,7 +228,17 @@ def get_cnn_rnn_attention(
     """
     RNN module
     """
-    # TODO : reshape and swapaxis, split data into time steps (see symbol_overlap_feature_single_att1_loss_bjm.py : line 261-269)
+    # split into time steps
+    feature = mx.symbol.Reshape(
+        feature,
+        shape=(rnn_window, -1, my_constant.FEATURE_DIM)
+    ) # (32, 1, 4096)
+
+    feature = mx.symbol.SwapAxis(
+        feature,
+        dim1=0,
+        dim2=1
+    ) # (1, 32, 4096)
 
     # f_h(X) (output of LSTM)
     feature = lstm_unroll(
@@ -241,13 +250,15 @@ def get_cnn_rnn_attention(
         dropout=rnn_dropout,
         bn=True
     )
+
     concat_feature = mx.sym.Reshape(
         data=mx.sym.Concat(
             *feature,
             dim=1
         ),
         shape=(-1, rnn_window, rnn_hidden)
-    )
+    ) # (1, 32, 512)
+
 
     """
     attention module
@@ -279,7 +290,8 @@ def get_cnn_rnn_attention(
     M = mx.sym.Concat(
         *M,
         dim=1
-    )
+    ) # (1, 32)
+
     # alphas
     a = mx.symbol.SoftmaxActivation(
         name='atten_softmax_%d' % i,
@@ -288,38 +300,40 @@ def get_cnn_rnn_attention(
     a = mx.sym.Reshape(
         data=a,
         shape=(-1, rnn_window, 1)
-    )
+    ) # (1, 32, 1)
+
     # r
     r = mx.symbol.broadcast_mul(
         name='atten_r_%d' % i,
         lhs=a,
         rhs=concat_feature
-    )
-    z = mx.sym.sum(data=r, axis=1)
+    ) # (1, 32, 512)
+
+    z = mx.sym.sum(data=r, axis=1) # (1, 512)
 
     # loss_target is used only in training
     if for_training:
         feature = mx.symbol.Concat(
             *feature,
             dim=0
-        )
+        ) # (32, 512)
 
         # loss_target
         gesture_branch_kargs = {}
         gesture_label = mx.symbol.Variable(
             name='att_gesture_softmax_label'
         )  # m
-        gesture_label = mx.symbol.Reshape(
-            mx.symbol.Concat(
-                *[mx.symbol.Reshape(
-                    gesture_label,
-                    shape=(0, 1)
-                )
-                  for i in range(rnn_window)],
-                dim=0
-            ),
-            shape=(-1,)
-        )
+        #gesture_label = mx.symbol.Reshape(
+        #    mx.symbol.Concat(
+        #        *[mx.symbol.Reshape(
+        #            gesture_label,
+        #            shape=(0, 1)
+        #        )
+        #          for i in range(rnn_window)],
+        #        dim=0
+        #    ),
+        #    shape=(-1,)
+        #)
         gesture_branch_kargs['label'] = gesture_label
         gesture_branch_kargs['grad_scale'] = 1 / rnn_window
         gesture_softmax, gesture_fc = get_branch(
@@ -331,6 +345,7 @@ def get_cnn_rnn_attention(
             use_ignore=True,  # ???
             **gesture_branch_kargs
         )
+
         loss.append(gesture_softmax)
 
 
@@ -339,6 +354,7 @@ def get_cnn_rnn_attention(
     att_gesture_label = mx.symbol.Variable(
         name='gesture_softmax_label'
     )  # m
+
     att_gesture_label = mx.symbol.Reshape(
         mx.symbol.Concat(
             *[mx.symbol.Reshape(
@@ -350,14 +366,15 @@ def get_cnn_rnn_attention(
             dim=0
         ),
         shape=(-1,)
-    )
+    ) # (1,)
+
     att_gesture_branch_kargs['label'] = att_gesture_label
     att_gesture_branch_kargs['grad_scale'] = 0.1 / rnn_window
 
-    att_gesture_softmax, att_gesture_fc = get_branch(
+    att_gesture_softmax, att_gesture_fc = get_branch( # (1, 200)
         for_training=for_training,
         name='gesture',  # m
-        data=z,
+        data=z, # (1, 512)
         num_class=num_cls,
         return_fc=True,
         use_ignore=True,  # ???
@@ -365,21 +382,19 @@ def get_cnn_rnn_attention(
     )
     loss.insert(0, att_gesture_softmax)
 
-    # TODO : self.net in symbol_overlap_feature_single_att1_loss_bjm.py : line 411
+
     net = loss[0] if len(loss) == 1 else mx.sym.Group(loss)
+    return net
 
     # TODO : code below are from symbol_overlap_feature_single_att1_loss_bjm.py : line 426+
-    net_inf = mx.symbol.FullyConnected(
-        name='gesture_last_fc',
-        data=z,
-        num_hidden=num_cls,
-        no_bias=False
-    )
-    net_inf = mx.symbol.SoftmaxActivation(net_inf)
+    # TODO : used in optimazation but keep it here
+    #net_inf = mx.symbol.FullyConnected(
+    #    name='gesture_last_fc',
+    #    data=z,
+    #    num_hidden=num_cls,
+    #    no_bias=False
+    #)
+    #net_inf = mx.symbol.SoftmaxActivation(net_inf)
 
-    """
-    things to return
-    """
-    return (net, net_inf)
 
 

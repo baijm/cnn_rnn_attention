@@ -29,13 +29,13 @@ if __name__ == "__main__":
                         type=str,
                         help="Directory of the MS-COCO format dataset")
     # list of image names for training (under dataset_root_dir)
-    parser.add_argument("--train_img_list", required=True,
+    parser.add_argument("--train_iname2cid_file", required=True,
                         type=str,
-                        help="list file of image names used in training")
+                        help="list file of image_name -> cid used in training")
     # list of image names for testing (under dataset_root_dir)
-    parser.add_argument("--test_img_list", required=True,
+    parser.add_argument("--test_iname2cid_file", required=True,
                         type=str,
-                        help="list file of image names used in testing")
+                        help="list file of image_name -> cid used in testing")
 
     # where to save logs
     parser.add_argument("--log_dir", required=True,
@@ -50,6 +50,12 @@ if __name__ == "__main__":
     parser.add_argument("--resume_training", required=True,
                         type=int,
                         help="resume traing from specified epoch (1) or fine-tune public model (0)")
+    # which checkpoint to continue from (needed if resume_training == 1)
+    parser.add_argument("--from_epoch", required=False,
+                        type=int,
+                        default=-1,
+                        help="which checkpoint to continue from (needed if resume_training == 1, default=-1(latest))")
+
     # public model (needed if resume_training == 0)
     parser.add_argument("--public_model_prefix", required=False,
                         type=str,
@@ -59,19 +65,14 @@ if __name__ == "__main__":
                         type=int,
                         default=0,
                         help="epoch of the public model (needed if resume_training == 0)")
-    # which checkpoint to continue from (needed if resume_training == 1)
-    parser.add_argument("--from_epoch", required=False,
-                        type=int,
-                        default=-1,
-                        help="which checkpoint to continue from (needed if resume_training == 1, default=-1(latest))")
 
     # number of different images in a batch
     parser.add_argument("--train_imgs_per_batch", required=False,
                         type=int,
-                        default=1,
+                        default=my_constant.IMG_PER_BATCH,
                         help="number of different images in a batch for training")
     # what to train
-    parser.add_argument("--train_rnn", required=True,
+    parser.add_argument("--train_rnn", required=False,
                         type=int,
                         help="train CNN_RNN_attention (1) or CNN only (0)")
     # number of epochs to train
@@ -82,13 +83,13 @@ if __name__ == "__main__":
     # learning_rate
     parser.add_argument("--learning_rate", required=False,
                         type=float,
-                        default=0.0001,
+                        default=my_constant.CNN_LEARNING_RATE,
                         help="learning rate in training")
     args = parser.parse_args()
 
     dataset_root_dir = args.dataset_root_dir
-    train_img_list = args.train_img_list
-    test_img_list = args.test_img_list
+    train_iname2cid_file = args.train_iname2cid_file
+    test_iname2cid_file = args.test_iname2cid_file
 
     log_dir = args.log_dir
     ckpt_dir = args.ckpt_dir
@@ -131,8 +132,8 @@ if __name__ == "__main__":
     print "####################\n# CONFIG\n####################"
     # dataset
     print "dataset :"
-    dataset_windows_path = os.path.join(dataset_root_dir, "gt_bbox_windows")
-    print "\twindow_path = {}".format(dataset_windows_path)
+    dataset_img_dir = os.path.join(dataset_root_dir, "gt_bbox", "rgb")
+    print "\twindow_path = {}".format(dataset_img_dir)
     dataset_name = dataset_root_dir.split('/')[-1]
     print "\tname = {}".format(dataset_name)
     dataset_num_cls = 200 if "CUB-200-2011" in dataset_name else 37
@@ -143,9 +144,9 @@ if __name__ == "__main__":
     # training config
     print "training :"
     train_config = {
-        "windows_dir" : dataset_windows_path,
+        "img_dir" : dataset_img_dir,
+        "iname2cid_file": os.path.join(dataset_root_dir, train_iname2cid_file),
         "imgs_per_batch" : train_imgs_per_batch,
-        "img_name_file" : os.path.join(dataset_root_dir, train_img_list),
         "shuffle_inside_image" : True,
         "decrement_cid" : True
     }
@@ -155,9 +156,9 @@ if __name__ == "__main__":
     # testing config
     print "testing :"
     test_config = {
-        "windows_dir": dataset_windows_path,
-        "imgs_per_batch": 1,
-        "img_name_file": os.path.join(dataset_root_dir, test_img_list),
+        "img_dir": dataset_img_dir,
+        "iname2cid_file": os.path.join(dataset_root_dir, test_iname2cid_file),
+        "imgs_per_batch": train_imgs_per_batch, # 1,
         "shuffle_inside_image": False,
         "decrement_cid": True
     }
@@ -186,21 +187,29 @@ if __name__ == "__main__":
     if train_rnn:
         print "load CNN + RNN + attention symbol"
 
-        # TODO : CNN + RNN + attention symbol
-        symbol, symbol_inf = my_symbol.get_cnn_rnn_attention(
+        symbol = my_symbol.get_cnn_rnn_attention(
             num_cls=dataset_num_cls,
             for_training=True,
             rnn_dropout=my_constant.RNN_DROPOUT,
             rnn_hidden=my_constant.NUM_RNN_HIDDEN,
-            rnn_window= 32 # TODO
+            rnn_window= my_constant.NUM_RNN_WINDOW
         )
 
-        print symbol.list_arguments()
-        print symbol.infer_shape(data=(32, 3, 224, 224))
+        # code below runs well --------------------------------
+        #arg_shape, out_shape, aux_shape = symbol.infer_shape(
+        #    data=(32, 3, 224, 224),
+        #    rnn_l0_init_c=(1, 512),
+        #    rnn_l0_init_h=(1, 512),
+        #    att_gesture_softmax_label=(32,),
+        #    gesture_softmax_label=(1,))
+        #
+        #arg_name =symbol.list_arguments()
+        #
+        #print 'output shape = ', out_shape, '\n'
+        #
+        #for name, shape in zip(arg_name, arg_shape):
+        #    print name, ' : ', shape
 
-        print '\n'
-        print symbol_inf.list_arguments()
-        print symbol.infer_shape(data=(32, 3, 224, 224))
     else:
         print "load CNN symbol"
 
@@ -215,9 +224,9 @@ if __name__ == "__main__":
     print "train iter ... "
     train_iter = my_iter.MyIter(
         for_rnn=train_rnn,
-        windows_dir=train_config["windows_dir"],
+        img_dir=train_config["img_dir"],
+        iname2cid_file=train_config["iname2cid_file"],
         imgs_per_batch=train_config["imgs_per_batch"],
-        img_name_file=train_config["img_name_file"],
         shuffle_inside_image=train_config["shuffle_inside_image"],
         decrement_cid=train_config["decrement_cid"]
     )
@@ -225,9 +234,9 @@ if __name__ == "__main__":
     print "test iter ... "
     test_iter = my_iter.MyIter(
         for_rnn=train_rnn,
-        windows_dir=test_config["windows_dir"],
+        img_dir=test_config["img_dir"],
+        iname2cid_file=test_config["iname2cid_file"],
         imgs_per_batch=test_config["imgs_per_batch"],
-        img_name_file=test_config["img_name_file"],
         shuffle_inside_image=test_config["shuffle_inside_image"],
         decrement_cid=test_config["decrement_cid"]
     )
@@ -255,8 +264,8 @@ if __name__ == "__main__":
             num_epoch=num_epochs,
             optimizer='sgd',
             learning_rate=learning_rate,
-            momentum=0.9,
-            wd=0.0001,
+            momentum=my_constant.MOMENTUM,
+            wd=my_constant.WD,
             arg_params=ckpt_model.arg_params,
             aux_params=ckpt_model.aux_params,
             begin_epoch=from_epoch
@@ -273,8 +282,8 @@ if __name__ == "__main__":
             num_epoch=num_epochs,
             optimizer='sgd',
             learning_rate=learning_rate,
-            momentum=0.9,
-            wd=0.0001,
+            momentum=my_constant.MOMENTUM,
+            wd=my_constant.WD,
             initializer=mx.init.Load(
                 param=pretrained_arg_params,
                 default_init=mx.init.Xavier(factor_type="in", magnitude=2),

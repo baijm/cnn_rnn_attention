@@ -4,7 +4,7 @@
 import os
 import sys
 import numpy as np
-import Image
+from PIL import Image
 
 def find_with_ext(dir, ext):
     """ return all file names (without extension) in a dir with ext
@@ -22,6 +22,37 @@ def find_with_ext(dir, ext):
     return file_names
 
 
+def get_last_epoch(model_dir, prefix):
+    """ get the last epoch with the specified prefix
+    Parameters
+    ----------------------------------
+    model_dir : str
+        where models (checkpoints) are saved
+    prefix : str
+        distinguish between models of different runs
+
+    Return
+    ----------------------------------
+    int specifying epoch of the latest model, or -1 if there are no matching checkpoints
+    """
+
+    all_files = os.listdir(model_dir)
+    model_epochs = []
+    for f in all_files:
+        if f.endswith(".params") and f.startswith(prefix):
+            f = f.replace(".params", "")
+            num = f.split("-")[-1]
+            model_epochs.append(int(num))
+
+    if len(model_epochs) == 0:
+        return -1
+    else:
+        return max(model_epochs)
+
+
+"""
+called in prepare_data, get Image from each step
+"""
 def resize(img, side_length, by_long_side=True):
     """ keep aspect ratio and resize the side specified to the given length
     :param img: one image or a list of images (loaded by Image.open())
@@ -186,29 +217,118 @@ def gen_windows(img, window_sizes, window_strides, crop_central=True):
     return res
 
 
-def get_last_epoch(model_dir, prefix):
-    """ get the last epoch with the specified prefix
-    Parameters
-    ----------------------------------
-    model_dir : str
-        where models (checkpoints) are saved
-    prefix : str
-        distinguish between models of different runs
+"""
+called by MyIter, generate windows by image file name
+"""
+def preprocess(img_dir, img_name, pre_crop_resize_length, mean_pixel, window_sizes, window_strides, after_crop_resize_length):
+    """
+    load an pre-process image(s) given by img_name, return pre-processed windows
 
-    Return
-    ----------------------------------
-    int specifying epoch of the latest model, or -1 if there are no matching checkpoints
+    Parameters
+    -----------------------------
+    img_dir : str
+        directory of cropped bbox images (RGB)
+    img_name: str
+    pre_crop_resize_length : int
+        size of the long side after resizing
+    mean_pixel : (int)
+        in RGB order, used to pad resized image
+    window_sizes : (int)
+        large windows first
+    window_strides : (int)
+        in the same order as window_sizes
+    after_crop_resize_length : int
+        size of each output window
+
+    Return:
+        numpy.ndarray of size (num_windows, height, width, channel)
+    -----------------------------
     """
 
-    all_files = os.listdir(model_dir)
-    model_epochs = []
-    for f in all_files:
-        if f.endswith(".params") and f.startswith(prefix):
-            f = f.replace(".params", "")
-            num = f.split("-")[-1]
-            model_epochs.append(int(num))
+    img_file = os.path.join(img_dir, img_name + ".jpg")
+    assert os.path.exists(img_file), "image file {} not exist".img_file
 
-    if len(model_epochs) == 0:
-        return -1
+    # load image
+    img_orig = Image.open(img_file)
+
+    # step 1. resize (numpy.ndarray, np.uint8)
+    w_orig, h_orig = img_orig.size
+    h2w = float(h_orig) / float(w_orig)
+    if h_orig > w_orig:
+        img_resized = img_orig.resize((int(pre_crop_resize_length / h2w), int(pre_crop_resize_length)))
     else:
-        return max(model_epochs)
+        img_resized = img_orig.resize((int(pre_crop_resize_length), int(pre_crop_resize_length * h2w)))
+    img_resized = np.array(img_resized)
+
+    # step 2. pad (numpy.ndarray, np.uint8)
+    assert isinstance(mean_pixel, tuple), "type(mean_pixel) must be tuple"
+    assert img_resized.shape[2] == len(mean_pixel), "number of channels mismatch"
+
+    h_resized, w_resized, c_resized = img_resized.shape
+    if h_resized == pre_crop_resize_length:
+        total_pad = pre_crop_resize_length - w_resized
+    else:
+        total_pad = pre_crop_resize_length - h_resized
+
+    if total_pad == 0:
+        img_padded = img_resized
+    else:
+        # create new image, fill with mean_pixel
+        img_padded = np.zeros(
+            (pre_crop_resize_length,
+             pre_crop_resize_length,
+             c_resized),
+            dtype=np.uint8
+        )
+        for ci in range(len(mean_pixel)):
+            img_padded[:, :, ci] = mean_pixel[ci]
+
+        # put the original image in the middle
+        half_pad = total_pad / 2
+        if w_resized < pre_crop_resize_length:
+            img_padded[0 : h_resized, half_pad : half_pad + w_resized, :] = img_resized
+        else:
+            img_padded[half_pad : half_pad + h_resized, 0 : w_resized, :] = img_resized
+
+    # step 3. crop & arrange windows -> resize windows -> subtract mean
+    # (get numpy.ndarray of numpy.float32 in the end)
+    assert len(window_sizes) == len(window_strides), \
+        "number of window_sizes({}) != number of window_strides({}) !".format(len(window_sizes),
+                                                                                               len(window_strides))
+    h_padded, w_padded, c_padded = img_padded.shape
+    windows = []
+
+    for size, stride in zip(window_sizes, window_strides):
+        # for each size, generate the central crop first
+        y_start = (h_padded - size) / 2
+        x_start = (w_padded - size) / 2
+        crop = img_padded[y_start : y_start + size, x_start : x_start + size, :]
+        crop = Image.fromarray(crop)
+        # resize
+        crop_resized = crop.resize((after_crop_resize_length, after_crop_resize_length))
+        # subtract mean
+        crop_subtracted = np.array(crop_resized).astype(np.float32)
+        for ci in range(len(mean_pixel)):
+            crop_subtracted[:, :, ci] -= mean_pixel[ci]
+        # add to result
+        windows.append(crop_subtracted)
+
+        # slide in 'Z'
+        for yi in range((h_padded - size) / stride + 1):
+            y_start = stride * yi
+            for xi in range((w_padded - size) / stride + 1):
+                x_start = stride * xi
+                crop = img_padded[y_start : y_start + size, x_start : x_start + size, :]
+                crop = Image.fromarray(crop)
+                # resize
+                crop_resized = crop.resize((after_crop_resize_length, after_crop_resize_length))
+                # subtract mean
+                crop_subtracted = np.array(crop_resized).astype(np.float32)
+                for ci in range(len(mean_pixel)):
+                    crop_subtracted[:, :, ci] -= mean_pixel[ci]
+                # add to result
+                windows.append(crop_subtracted)
+
+    windows = np.array(windows)
+
+    return windows
