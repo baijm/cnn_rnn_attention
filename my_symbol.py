@@ -204,6 +204,12 @@ def get_cnn_rnn_attention(
     -----------------------------
     (mx.symbol for net, mx.symbol for loss)
     """
+    """
+    require from DataIter:
+        data
+        gesture_softmax_label
+        att_gesture_softmax_label
+    """
 
     # input
     net = mx.symbol.Variable(name="data")
@@ -217,6 +223,8 @@ def get_cnn_rnn_attention(
         data=net,
         num_classes=num_cls,
     )["relu7"]
+
+    loss = []
 
     """
     RNN module
@@ -288,20 +296,7 @@ def get_cnn_rnn_attention(
         rhs=concat_feature
     )
     z = mx.sym.sum(data=r, axis=1)
-    net_sym = z
-    net_sym = mx.symbol.FullyConnected(
-        name='gesture_last_fc',
-        data=net_sym,
-        num_hidden=num_cls,
-        no_bias=False
-    )
-    net_sym = mx.symbol.SoftmaxActivation(net_sym)
 
-
-    """
-    loss
-    """
-    loss = []
     # loss_target is used only in training
     if for_training:
         feature = mx.symbol.Concat(
@@ -338,6 +333,7 @@ def get_cnn_rnn_attention(
         )
         loss.append(gesture_softmax)
 
+
     # loss_attention is used in both training and testing
     att_gesture_branch_kargs = {}
     att_gesture_label = mx.symbol.Variable(
@@ -357,6 +353,7 @@ def get_cnn_rnn_attention(
     )
     att_gesture_branch_kargs['label'] = att_gesture_label
     att_gesture_branch_kargs['grad_scale'] = 0.1 / rnn_window
+
     att_gesture_softmax, att_gesture_fc = get_branch(
         for_training=for_training,
         name='gesture',  # m
@@ -368,10 +365,21 @@ def get_cnn_rnn_attention(
     )
     loss.insert(0, att_gesture_softmax)
 
+    # TODO : self.net in symbol_overlap_feature_single_att1_loss_bjm.py : line 411
+    net = loss[0] if len(loss) == 1 else mx.sym.Group(loss)
+
+    # TODO : code below are from symbol_overlap_feature_single_att1_loss_bjm.py : line 426+
+    net_inf = mx.symbol.FullyConnected(
+        name='gesture_last_fc',
+        data=z,
+        num_hidden=num_cls,
+        no_bias=False
+    )
+    net_inf = mx.symbol.SoftmaxActivation(net_inf)
+
     """
     things to return
     """
-    net_loss = loss[0] if len(loss) == 1 else mx.sym.Group(loss)
-    return (net_sym, net_loss)
+    return (net, net_inf)
 
 

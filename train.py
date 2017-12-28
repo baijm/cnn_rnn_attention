@@ -145,8 +145,6 @@ if __name__ == "__main__":
     train_config = {
         "windows_dir" : dataset_windows_path,
         "imgs_per_batch" : train_imgs_per_batch,
-        "data_name" : "data",
-        "label_name" : "softmax_label",
         "img_name_file" : os.path.join(dataset_root_dir, train_img_list),
         "shuffle_inside_image" : True,
         "decrement_cid" : True
@@ -159,8 +157,6 @@ if __name__ == "__main__":
     test_config = {
         "windows_dir": dataset_windows_path,
         "imgs_per_batch": 1,
-        "data_name": "data",
-        "label_name": "softmax_label",
         "img_name_file": os.path.join(dataset_root_dir, test_img_list),
         "shuffle_inside_image": False,
         "decrement_cid": True
@@ -191,13 +187,20 @@ if __name__ == "__main__":
         print "load CNN + RNN + attention symbol"
 
         # TODO : CNN + RNN + attention symbol
-        symbol, loss = my_symbol.get_cnn_rnn_attention(
+        symbol, symbol_inf = my_symbol.get_cnn_rnn_attention(
             num_cls=dataset_num_cls,
             for_training=True,
             rnn_dropout=my_constant.RNN_DROPOUT,
             rnn_hidden=my_constant.NUM_RNN_HIDDEN,
             rnn_window= 32 # TODO
         )
+
+        print symbol.list_arguments()
+        print symbol.infer_shape(data=(32, 3, 224, 224))
+
+        print '\n'
+        print symbol_inf.list_arguments()
+        print symbol.infer_shape(data=(32, 3, 224, 224))
     else:
         print "load CNN symbol"
 
@@ -205,17 +208,15 @@ if __name__ == "__main__":
 
     print "done\n"
 
-
     """
     data iter
     """
     print "####################\n# CREATE DATAITERS\n####################"
     print "train iter ... "
     train_iter = my_iter.MyIter(
+        for_rnn=train_rnn,
         windows_dir=train_config["windows_dir"],
         imgs_per_batch=train_config["imgs_per_batch"],
-        data_name=train_config["data_name"],
-        label_name=train_config["label_name"],
         img_name_file=train_config["img_name_file"],
         shuffle_inside_image=train_config["shuffle_inside_image"],
         decrement_cid=train_config["decrement_cid"]
@@ -223,10 +224,9 @@ if __name__ == "__main__":
 
     print "test iter ... "
     test_iter = my_iter.MyIter(
+        for_rnn=train_rnn,
         windows_dir=test_config["windows_dir"],
         imgs_per_batch=test_config["imgs_per_batch"],
-        data_name=test_config["data_name"],
-        label_name=test_config["label_name"],
         img_name_file=test_config["img_name_file"],
         shuffle_inside_image=test_config["shuffle_inside_image"],
         decrement_cid=test_config["decrement_cid"]
@@ -291,7 +291,7 @@ if __name__ == "__main__":
     print "####################\n# TRAIN\n####################"
     model.fit(
         X=train_iter,
-        # eval_data=test_iter,
+        eval_data=test_iter,
         eval_metric=['acc', 'ce'],
         batch_end_callback=mx.callback.log_train_metric(50),
         epoch_end_callback=mx.callback.do_checkpoint(ckpt_dir + '/' + ckpt_prefix)
