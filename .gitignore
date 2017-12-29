@@ -6,3 +6,7 @@ symbol_overlap_feature_single_att1_loss_bjm.py
 vgg_from_mxnet.py
 constant.py
 *.log
+*.pyc
+*.py~
+.gitignore~
+*.sh~

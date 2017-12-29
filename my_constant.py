@@ -9,8 +9,8 @@ GAMMA = 10
 RESIZE_SIDE = 256
 WINDOW_SIZES = (224, 168) #(224, 168, 112)
 WINDOW_STRIDES = (32, 44) #(32, 44, 48)
-#WINDOW_NUMS = tuple([((RESIZE_SIDE - p[0])/p[1] + 1) ** 2 + 1
-#                     for p in zip(WINDOW_SIZES, WINDOW_STRIDES)])
+WINDOW_NUMS = tuple([((RESIZE_SIDE - p[0])/p[1] + 1) ** 2 + 1
+                     for p in zip(WINDOW_SIZES, WINDOW_STRIDES)])
 
 
 # CNN config
@@ -23,7 +23,7 @@ MEAN_PIXEL_INT = (123, 117, 104) # RGB
 # RNN config
 NUM_RNN_HIDDEN = 512 # as in paper
 NUM_RNN_LAYER = 1
-NUM_RNN_WINDOW = 32
+NUM_RNN_WINDOW = WINDOW_NUMS
 RNN_DROPOUT = 0.5
 
 

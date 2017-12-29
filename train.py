@@ -85,7 +85,14 @@ if __name__ == "__main__":
                         type=float,
                         default=my_constant.CNN_LEARNING_RATE,
                         help="learning rate in training")
+
+    # select gpu
+    parser.add_argument("--gpu_id", required=False,
+                        type=int,
+                        default=0,
+                        help="select gpu")
     args = parser.parse_args()
+
 
     dataset_root_dir = args.dataset_root_dir
     train_iname2cid_file = args.train_iname2cid_file
@@ -104,6 +111,7 @@ if __name__ == "__main__":
     num_epochs = args.num_epochs
     learning_rate = args.learning_rate
 
+    gpu_id = args.gpu_id
 
     """
     set up logging
@@ -138,8 +146,9 @@ if __name__ == "__main__":
     print "\tname = {}".format(dataset_name)
     dataset_num_cls = 200 if "CUB-200-2011" in dataset_name else 37
     print "\tnum_cls = {}".format(dataset_num_cls)
+
     # device
-    ctx = mx.gpu(0)
+    ctx = mx.gpu(gpu_id)
 
     # training config
     print "training :"

@@ -140,7 +140,6 @@ def get_vgg16(data,
     return out
 
 
-# TODO : still not sure how to make the two losses in paper ... just return softmax now
 def get_cnn(
         num_cls,
         for_training=False,
