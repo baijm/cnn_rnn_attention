@@ -48,8 +48,9 @@ class MyIter(mx.io.DataIter):
         self.shuffle_inside_image = shuffle_inside_image
         self.decrement_cid = decrement_cid
 
-        # load configurations in pre-processing
-        # TODO : these are fixed for now
+
+        # configurations in pre-processing
+        # TODO : these are given in my_constant.py now
         self.window_sizes = my_constant.WINDOW_SIZES
         self.window_strides = my_constant.WINDOW_STRIDES
         self.pre_crop_resize_side = my_constant.RESIZE_SIDE
@@ -57,41 +58,68 @@ class MyIter(mx.io.DataIter):
         self.after_crop_resize_length = my_constant.INPUT_SIDE
 
         # compute number of windows per image
-        self.windows_per_scale = []
-        self.windows_per_img = 0
+        self.windows_per_scale = [] # used in shuffling windows of each image
+        self.windows_per_img = 0 # used as number of rnn windows
         for p in zip(self.window_sizes, self.window_strides):
             curr_num = ((self.pre_crop_resize_side - p[0]) / p[1] + 1) ** 2 + 1
             self.windows_per_scale.append(curr_num)
             self.windows_per_img += curr_num
         self.windows_per_scale = tuple(self.windows_per_scale)
 
-        # batch size
-        self.batch_size = self.img_per_batch * self.windows_per_img
-
         # status
         self.cursor = 0 # index of the next image, point to self.iname_list
         self.iname_list, self.iname2cid = self._load_iname2cid_file() # list of image names
 
+
+        # batch_size / shape of data / shape of label depends on usage
+        # [important !!!]
         # data shapes
         self.data_shapes = []
-        self.data_shapes.append(('data', (self.batch_size, 3, my_constant.INPUT_SIDE, my_constant.INPUT_SIDE)))
-
         # RNN init states
         self.init_state_shapes = []
-        if self.for_rnn:
-            for i in range(my_constant.NUM_RNN_LAYER):
-                self.init_state_shapes.append(('rnn_l%d_init_c' % i, (1, my_constant.NUM_RNN_HIDDEN)))
-                self.init_state_shapes.append(('rnn_l%d_init_h' % i, (1, my_constant.NUM_RNN_HIDDEN)))
-
-        self.init_state_arrays = [mx.nd.zeros(x[1]) for x in self.init_state_shapes]
-
         # label shapes
         self.label_shapes = []
+
         if self.for_rnn:
-            self.label_shapes.append(('gesture_softmax_label', (1, )))
-            self.label_shapes.append(('att_gesture_softmax_label', (self.batch_size, )))
+            # for cnn+rnn+attention
+            self.batch_size = self.img_per_batch
+            assert self.batch_size == 1, "rnn with more than 1 img per batch is not supported"
+
+            # TODO : reshape to make the shape (batch_size, num_windows * c, h, w), restore shape in symbol
+            self.data_shapes.append(('data',
+                                     (self.batch_size,
+                                      self.windows_per_img * my_constant.INPUT_CHANNEL,
+                                      my_constant.INPUT_SIDE,
+                                      my_constant.INPUT_SIDE)))
+
+            for i in range(my_constant.NUM_RNN_LAYER):
+                self.init_state_shapes.append(('rnn_l%d_init_c' % i,
+                                               (self.batch_size,
+                                                my_constant.NUM_RNN_HIDDEN)))
+                self.init_state_shapes.append(('rnn_l%d_init_h' % i,
+                                               (self.batch_size,
+                                                my_constant.NUM_RNN_HIDDEN)))
+
+            self.label_shapes.append(('gesture_softmax_label',
+                                      (self.batch_size, )))
+            self.label_shapes.append(('att_gesture_softmax_label',
+                                      (self.batch_size, )))
         else:
-            self.label_shapes.append(('softmax_label', (self.batch_size, )))
+            # for cnn
+            self.batch_size = self.img_per_batch * self.windows_per_img
+
+            self.data_shapes.append(('data',
+                                     (self.batch_size,
+                                      my_constant.INPUT_CHANNEL,
+                                      my_constant.INPUT_SIDE,
+                                      my_constant.INPUT_SIDE)))
+
+            self.label_shapes.append(('softmax_label',
+                                      (self.batch_size,)))
+
+
+        # clear LSTM state
+        self.init_state_arrays = [mx.nd.zeros(x[1]) for x in self.init_state_shapes]
 
         # provide_data and provide_label
         self.provide_data = self.data_shapes + self.init_state_shapes
@@ -179,26 +207,27 @@ class MyIter(mx.io.DataIter):
                 curr_windows = curr_windows[reorder_ids, :, :, :]
 
                 # append to list
-                data.append(curr_windows)
-                label.append([curr_cid for i in range(self.windows_per_img)])
+                if self.for_rnn:
+                    data.append(curr_windows.reshape(1, -1, curr_windows.shape[2], curr_windows.shape[3]))
+                    label.append([curr_cid])
+                else:
+                    data.append(curr_windows)
+                    label.append([curr_cid for i in range(self.windows_per_img)])
 
             # make batch
             data = np.concatenate(data, axis=0)
             label = np.concatenate(label, axis=0)
 
-            data = [mx.nd.array(data)]
-
             if self.for_rnn:
-                assert len(np.unique(label)) == 1
-                single_label = np.array(np.unique(label))
+                # reshape to make the shape (batch_size, num_windows * c, h, w)
+                data = [mx.nd.array(data)]
 
-                # ('gesture_softmax_label', (1, ))
-                # ('att_gesture_softmax_label', (self.batch_size, ))
                 return mx.io.DataBatch(
                     data=data + self.init_state_arrays,
-                    label=[mx.nd.array(single_label), mx.nd.array(label)])
+                    label=[mx.nd.array(label), mx.nd.array(label)])
 
             else:
+                data = [mx.nd.array(data)]
                 label = [mx.nd.array(label)]
 
                 return mx.io.DataBatch(data=data, label=label)

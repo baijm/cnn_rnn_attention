@@ -14,6 +14,7 @@ import my_symbol
 import my_iter
 import my_constant
 import my_util
+import my_metric
 
 
 if __name__ == "__main__":
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     # resume training or fine-tune public model
     parser.add_argument("--resume_training", required=True,
                         type=int,
-                        help="resume traing from specified epoch (1) or fine-tune public model (0)")
+                        help="resume training from specified epoch (1) or fine-tune public model (0)")
     # which checkpoint to continue from (needed if resume_training == 1)
     parser.add_argument("--from_epoch", required=False,
                         type=int,
@@ -204,13 +205,15 @@ if __name__ == "__main__":
             rnn_window= my_constant.NUM_RNN_WINDOW
         )
 
-        # code below runs well --------------------------------
+        # code below runs
         #arg_shape, out_shape, aux_shape = symbol.infer_shape(
-        #    data=(32, 3, 224, 224),
-        #    rnn_l0_init_c=(1, 512),
-        #    rnn_l0_init_h=(1, 512),
-        #    att_gesture_softmax_label=(32,),
-        #    gesture_softmax_label=(1,))
+        #    data= (train_imgs_per_batch,
+        #           my_constant.NUM_RNN_WINDOW * my_constant.INPUT_CHANNEL,
+        #           my_constant.INPUT_SIDE, my_constant.INPUT_SIDE),
+        #    rnn_l0_init_c=(train_imgs_per_batch, my_constant.NUM_RNN_HIDDEN),
+        #    rnn_l0_init_h=(train_imgs_per_batch, my_constant.NUM_RNN_HIDDEN),
+        #    att_gesture_softmax_label=(train_imgs_per_batch,),
+        #    gesture_softmax_label=(train_imgs_per_batch,))
         #
         #arg_name =symbol.list_arguments()
         #
@@ -310,7 +313,7 @@ if __name__ == "__main__":
     model.fit(
         X=train_iter,
         eval_data=test_iter,
-        eval_metric=['acc', 'ce'],
+        eval_metric=my_metric.Accuracy,
         batch_end_callback=mx.callback.log_train_metric(50),
         epoch_end_callback=mx.callback.do_checkpoint(ckpt_dir + '/' + ckpt_prefix)
     )

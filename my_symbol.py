@@ -210,8 +210,15 @@ def get_cnn_rnn_attention(
     """
 
     # input
-    net = mx.symbol.Variable(name="data")
-    # TODO : reshape, swapaxis, reshape (see symbol_overlap_feature_single_att1_loss_bjm.py : line 232-234)
+    net = mx.symbol.Variable(name="data") # (batch_size, rnn_windows * c, h, w)
+    net = mx.symbol.Reshape(net, shape=(0, -1, # (batch_size, rnn_windows, c, h, w)
+                                        my_constant.INPUT_CHANNEL,
+                                        my_constant.INPUT_SIDE, my_constant.INPUT_SIDE))
+    net = mx.symbol.SwapAxis(net, # (rnn_windows, batch_size, c, h, w)
+                             dim1=0, dim2=1)
+    net = mx.symbol.Reshape(net, shape=(-1, # (rnn_windows * batch_size, c, h, w)
+                                        my_constant.INPUT_CHANNEL,
+                                        my_constant.INPUT_SIDE, my_constant.INPUT_SIDE))
     # TODO : batchnorm (see symbol_overlap_feature_single_att1_loss_bjm.py : line 238-243)
 
     """
@@ -257,7 +264,6 @@ def get_cnn_rnn_attention(
         ),
         shape=(-1, rnn_window, rnn_hidden)
     ) # (1, 32, 512)
-
 
     """
     attention module
@@ -322,17 +328,18 @@ def get_cnn_rnn_attention(
         gesture_label = mx.symbol.Variable(
             name='att_gesture_softmax_label'
         )  # m
-        #gesture_label = mx.symbol.Reshape(
-        #    mx.symbol.Concat(
-        #        *[mx.symbol.Reshape(
-        #            gesture_label,
-        #            shape=(0, 1)
-        #        )
-        #          for i in range(rnn_window)],
-        #        dim=0
-        #    ),
-        #    shape=(-1,)
-        #)
+        gesture_label = mx.symbol.Reshape(
+            mx.symbol.Concat(
+                *[mx.symbol.Reshape(
+                    gesture_label,
+                    shape=(0, 1)
+                )
+                  for i in range(rnn_window)],
+                dim=0
+            ),
+            shape=(-1,)
+        )
+
         gesture_branch_kargs['label'] = gesture_label
         gesture_branch_kargs['grad_scale'] = 1 / rnn_window
         gesture_softmax, gesture_fc = get_branch(
@@ -379,6 +386,7 @@ def get_cnn_rnn_attention(
         use_ignore=True,  # ???
         **att_gesture_branch_kargs
     )
+
     loss.insert(0, att_gesture_softmax)
 
 
