@@ -4,7 +4,7 @@ script for testing CNN models
 
 import mxnet as mx
 import numpy as np
-import logging
+import scipy.io
 import time
 import os
 import sys
@@ -25,11 +25,11 @@ if __name__ == "__main__":
         description="test CNN"
     )
     # root dir of COCO-formed dataset
-    parser.add_argument("--dataset_root_dir", required=True,
+    parser.add_argument("--bbox_dir", required=True,
                         type=str,
-                        help="Directory of the MS-COCO format dataset")
-    # list of image names for testing (under dataset_root_dir)
-    parser.add_argument("--test_iname2cid_file", required=True,
+                        help="Directory of cropped bounding boxes, including 'rgb' and 'mask' subdirs")
+    # list of image names for testing (under bbox_dir)
+    parser.add_argument("--iname2cid_file", required=True,
                         type=str,
                         help="list file of image_name -> cid used in testing")
     # whether to decrement ground truth cid
@@ -40,8 +40,8 @@ if __name__ == "__main__":
 
     # where to save results
     # results include :
-    #   one .csv with each line (test_iname_wid, predicted_cid, score_for_cls0, score_for_cls1, ...)
     #   one .csv with each line (test_iname, predicted_cid, avg_score_for_cls0, avg_score_for_cls1, ...)
+    #   one .mat with confusion matrix
     parser.add_argument("--res_dir", required=True,
                         type=str,
                         help="Directory where summary files will be saved")
@@ -67,8 +67,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    dataset_root_dir = args.dataset_root_dir
-    test_iname2cid_file = args.test_iname2cid_file
+    bbox_dir = args.bbox_dir
+    iname2cid_file = args.iname2cid_file
     decrement_cid = bool(args.decrement_cid)
     res_dir = args.res_dir
     res_prefix = args.res_prefix
@@ -76,20 +76,24 @@ if __name__ == "__main__":
     model_epoch = int(args.model_epoch)
     gpu_id = args.gpu_id
 
-    dataset_img_dir = os.path.join(dataset_root_dir, "gt_bbox", "rgb")
+    bbox_img_dir = os.path.join(bbox_dir, "rgb")
+    assert os.path.exists(bbox_img_dir)
 
 
     """
     load iname2cid_file
     """
     print "####################\n# CONFIG\n####################"
-    print "dataset_root_dir = {} ".format(dataset_root_dir),
-    assert os.path.exists(dataset_root_dir), "directory not exist"
+    print "bbox = {} ".format(bbox_dir),
+    assert os.path.exists(bbox_dir), "directory not exist"
     print ""
 
-    print "test_iname2cid_file = {} ".format(test_iname2cid_file),
-    assert os.path.exists(os.path.join(dataset_root_dir, test_iname2cid_file)), "file not exist"
+    print "iname2cid_file = {} ".format(iname2cid_file),
+    assert os.path.exists(iname2cid_file), "file not exist"
     print ""
+
+    # bbox_dir and iname2cid_file should be in the same dir
+    assert os.path.dirname(bbox_dir) == os.path.dirname(iname2cid_file), "bbox_dir and iname2cid_file should be in the same directory"
 
     print "decrement_cid = {}".format(decrement_cid)
 
@@ -101,9 +105,9 @@ if __name__ == "__main__":
         print "\talready exists"
     print "res_prefix = {}".format(res_prefix)
 
-    print "load {} ... ".format(test_iname2cid_file),
+    print "load {} ... ".format(iname2cid_file),
     iname2cid = {}
-    with open(os.path.join(dataset_root_dir, test_iname2cid_file), 'r') as f:
+    with open(iname2cid_file, 'r') as f:
         for line in f:
             parts = line.split()
 
@@ -115,6 +119,7 @@ if __name__ == "__main__":
             iname2cid.update({iname: cid})
     print "\tdone\n"
 
+    num_cls = 200 if "CUB-200-2011" in bbox_dir else 37
 
     """
     load model
@@ -144,19 +149,22 @@ if __name__ == "__main__":
     cid_list = [str(c) for c in cid_list]
 
     # result of each bbox
-    bbox_res_file = os.path.join(res_dir, res_prefix + "_bbox.csv")
-    br_f = open(bbox_res_file, 'w')
+    br_file = os.path.join(res_dir, res_prefix + "_bbox.csv")
+    br_f = open(br_file, 'w')
     br_fields = ['iname', 'gt_cid', 'pred_cid'] + cid_list
     br_writer = csv.DictWriter(br_f, fieldnames=br_fields)
     br_writer.writeheader()
 
+    # confusion matrix
+    conf_mat = np.zeros((num_cls, num_cls))
+
     # for each test image
-    for iname, cid in iname2cid.items():
+    for iname, gt_cid in iname2cid.items():
         start_time = time.time()
 
         # load and preprocess image
         windows = my_util.preprocess(
-            img_dir=dataset_img_dir,
+            img_dir=bbox_img_dir,
             img_name=iname,
             pre_crop_resize_length=my_constant.RESIZE_SIDE,
             mean_pixel=my_constant.MEAN_PIXEL_INT,
@@ -180,17 +188,25 @@ if __name__ == "__main__":
         for c in cid_list:
             prob_dict.update({c : avg_output[int(c)]})
 
-        print "{} : gt_cid = {}, pred_cid = {}".format(iname, cid, pred_cid),
-        if pred_cid == cid:
+        print "{} :\tgt_cid = {}\tpred_cid = {}\t".format(iname, gt_cid, pred_cid),
+        if pred_cid == gt_cid:
             print "right",
         else:
             print "WRONG !",
 
-        res_dict = {'iname' : iname, 'gt_cid' : cid, 'pred_cid' : pred_cid}
+        # write csv file
+        res_dict = {'iname' : iname, 'gt_cid' : gt_cid, 'pred_cid' : pred_cid}
         res_dict.update(prob_dict)
         br_writer.writerow(res_dict)
+
+        # add to confusion matrix
+        conf_mat[gt_cid][pred_cid] += 1
 
         end_time = time.time()
         print "\t", end_time - start_time, "s"
 
     br_f.close()
+
+    # save confusion matrix
+    cm_file = os.path.join(res_dir, res_prefix + "_conf_matrix.mat")
+    scipy.io.savemat(cm_file, {'confusion_matrix' : conf_mat})
