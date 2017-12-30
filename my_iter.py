@@ -83,7 +83,7 @@ class MyIter(mx.io.DataIter):
         if self.for_rnn:
             # for cnn+rnn+attention
             self.batch_size = self.img_per_batch
-            assert self.batch_size == 1, "rnn with more than 1 img per batch is not supported"
+            #assert self.batch_size == 1, "rnn with more than 1 img per batch is not supported"
 
             # TODO : reshape to make the shape (batch_size, num_windows * c, h, w), restore shape in symbol
             self.data_shapes.append(('data',

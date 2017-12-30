@@ -313,7 +313,7 @@ if __name__ == "__main__":
     model.fit(
         X=train_iter,
         eval_data=test_iter,
-        eval_metric=my_metric.Accuracy,
+        eval_metric=my_metric.Accuracy(0, 'g'),
         batch_end_callback=mx.callback.log_train_metric(50),
         epoch_end_callback=mx.callback.do_checkpoint(ckpt_dir + '/' + ckpt_prefix)
     )
