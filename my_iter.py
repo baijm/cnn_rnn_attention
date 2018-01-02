@@ -195,16 +195,17 @@ class MyIter(mx.io.DataIter):
                 self.cursor += 1
 
                 # shuffle windows with the same scale
-                reorder_ids = []
-                offset = 0
-                for count in self.windows_per_scale:
-                    scale_ids = range(offset, offset + count)
-                    random.shuffle(scale_ids)
+                if self.shuffle_inside_image:
+                    reorder_ids = []
+                    offset = 0
+                    for count in self.windows_per_scale:
+                        scale_ids = range(offset, offset + count)
+                        random.shuffle(scale_ids)
 
-                    reorder_ids.extend(scale_ids)
-                    offset += count
+                        reorder_ids.extend(scale_ids)
+                        offset += count
 
-                curr_windows = curr_windows[reorder_ids, :, :, :]
+                    curr_windows = curr_windows[reorder_ids, :, :, :]
 
                 # append to list
                 if self.for_rnn:

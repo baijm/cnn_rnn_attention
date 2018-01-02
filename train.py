@@ -72,10 +72,15 @@ if __name__ == "__main__":
                         type=int,
                         default=my_constant.IMG_PER_BATCH,
                         help="number of different images in a batch for training")
-    # what to train
-    parser.add_argument("--train_rnn", required=False,
+    # whether cnn should be trained
+    # if train_rnn == True, cnn will be trained together if train_cnn == True, otherwise cnn part will be fixed
+    parser.add_argument("--train_cnn", required=True,
                         type=int,
-                        help="train CNN_RNN_attention (1) or CNN only (0)")
+                        help="train RNN+attention")
+    # whether rnn should be trained
+    parser.add_argument("--train_rnn", required=True,
+                        type=int,
+                        help="train CNN")
     # number of epochs to train
     parser.add_argument("--num_epochs", required=False,
                         type=int,
@@ -108,6 +113,7 @@ if __name__ == "__main__":
     from_epoch = args.from_epoch
 
     train_imgs_per_batch = args.train_imgs_per_batch
+    train_cnn = bool(args.train_cnn)
     train_rnn = bool(args.train_rnn)
     num_epochs = args.num_epochs
     learning_rate = args.learning_rate
@@ -182,10 +188,18 @@ if __name__ == "__main__":
     print "\tdir = {}".format(ckpt_dir)
 
     ckpt_prefix = dataset_name
+    # at least one of CNN and RNN+attention should be trained
+    assert train_cnn or train_rnn, "at least one of CNN and RNN+attention should be trained"
     if train_rnn:
-        ckpt_prefix += "_full"
+        if train_cnn:
+            ckpt_prefix += "_full"
+        else:
+            ckpt_prefix += "_rnn"
     else:
         ckpt_prefix += "_cnn"
+
+    print "\ttrain_cnn = {}".format(train_cnn)
+    print "\ttrain_rnn = {}".format(train_rnn)
     print "\tprefix = {}".format(ckpt_prefix)
 
     print "done\n"
@@ -195,14 +209,15 @@ if __name__ == "__main__":
     """
     print "####################\n# LOAD SYMBOL\n####################"
     if train_rnn:
-        print "load CNN + RNN + attention symbol"
+        print "load CNN + RNN + attention symbol (train_cnn = {})".format(train_cnn)
 
         symbol = my_symbol.get_cnn_rnn_attention(
             num_cls=dataset_num_cls,
             for_training=True,
             rnn_dropout=my_constant.RNN_DROPOUT,
             rnn_hidden=my_constant.NUM_RNN_HIDDEN,
-            rnn_window= my_constant.NUM_RNN_WINDOW
+            rnn_window= my_constant.NUM_RNN_WINDOW,
+            fix_till_relu7=not train_cnn
         )
 
         # code below runs
@@ -225,7 +240,8 @@ if __name__ == "__main__":
     else:
         print "load CNN symbol"
 
-        symbol = my_symbol.get_cnn(num_cls=dataset_num_cls)
+        symbol = my_symbol.get_cnn(num_cls=dataset_num_cls,
+                                   fix_till_relu7=not train_cnn)
 
     print "done\n"
 

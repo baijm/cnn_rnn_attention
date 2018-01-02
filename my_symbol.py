@@ -60,7 +60,8 @@ def get_branch(for_training,
 
 def get_vgg16(data,
               num_classes,
-              batch_norm=False):
+              batch_norm=False,
+              fix_till_relu7=False):
     """ get VGG16 symbol
     Parameters
     ----------------------------
@@ -70,11 +71,16 @@ def get_vgg16(data,
         number of classification classes
     batch_norm: bool (default = False)
         whether to use batch normalization
+    fix_till_relu7 : bool (default = False)
+        whether to set
 
     Return
     -----------------------------
     {layer_name -> symbol, 'loss' -> []}
     """
+
+    # used to fix feature layers when training cnn+rnn+attention
+    lr_attr = {'lr_mult': '0'}
 
     layers, filters = ([2, 2, 3, 3, 3], [64, 128, 256, 512, 512])
     net = data
@@ -83,47 +89,94 @@ def get_vgg16(data,
     # convolutional blocks
     for i, num in enumerate(layers):
         for j in range(num):
-            net = mx.sym.Convolution(data=net,
-                                     kernel=(3, 3), pad=(1, 1),
-                                     num_filter=filters[i],
-                                     name="conv%s_%s" % (i + 1, j + 1)
-                                     )
+            if fix_till_relu7:
+                net = mx.sym.Convolution(data=net,
+                                         kernel=(3, 3), pad=(1, 1),
+                                         num_filter=filters[i],
+                                         name="conv%s_%s" % (i + 1, j + 1),
+                                         attr=lr_attr)
+            else:
+                net = mx.sym.Convolution(data=net,
+                                         kernel=(3, 3), pad=(1, 1),
+                                         num_filter=filters[i],
+                                         name="conv%s_%s" % (i + 1, j + 1))
             out["conv%s_%s" % (i + 1, j + 1)] = net
 
             if batch_norm:
-                net = mx.symbol.BatchNorm(data=net,
-                                          name="bn%s_%s" % (i + 1, j + 1)
-                                          )
+                if fix_till_relu7:
+                    net = mx.symbol.BatchNorm(data=net,
+                                              name="bn%s_%s" % (i + 1, j + 1),
+                                              attr=lr_attr)
+                else:
+                    net = mx.symbol.BatchNorm(data=net,
+                                              name="bn%s_%s" % (i + 1, j + 1))
+
                 out["bn%s_%s" % (i + 1, j + 1)] = net
 
-            net = mx.sym.Activation(data=net,
-                                    act_type="relu",
-                                    name="relu%s_%s" % (i + 1, j + 1)
-                                    )
+            if fix_till_relu7:
+                net = mx.sym.Activation(data=net,
+                                        act_type="relu",
+                                        name="relu%s_%s" % (i + 1, j + 1),
+                                        attr=lr_attr)
+            else:
+                net = mx.sym.Activation(data=net,
+                                        act_type="relu",
+                                        name="relu%s_%s" % (i + 1, j + 1))
             out["relu%s_%s" % (i + 1, j + 1)] = net
 
-        net = mx.sym.Pooling(data=net,
-                             pool_type="max",
-                             kernel=(2, 2),
-                             stride=(2, 2),
-                             name="pool%s" % (i + 1))
+        if fix_till_relu7:
+            net = mx.sym.Pooling(data=net,
+                                 pool_type="max",
+                                 kernel=(2, 2),
+                                 stride=(2, 2),
+                                 name="pool%s" % (i + 1),
+                                 attr=lr_attr)
+        else:
+            net = mx.sym.Pooling(data=net,
+                                 pool_type="max",
+                                 kernel=(2, 2),
+                                 stride=(2, 2),
+                                 name="pool%s" % (i + 1))
         out["pool%s" % (i + 1)] = net
 
-    net = mx.sym.Flatten(data=net, name="flatten")
+    if fix_till_relu7:
+        net = mx.sym.Flatten(data=net, name="flatten", attr=lr_attr)
+    else:
+        net = mx.sym.Flatten(data=net, name="flatten")
+
     out["flatten"] = net
 
     # fully connected layers
-    net = mx.sym.FullyConnected(data=net, num_hidden=4096, name="fc6")
+    if fix_till_relu7:
+        net = mx.sym.FullyConnected(data=net, num_hidden=4096, name="fc6", attr=lr_attr)
+    else:
+        net = mx.sym.FullyConnected(data=net, num_hidden=4096, name="fc6")
     out["fc6"] = net
-    net = mx.sym.Activation(data=net, act_type="relu", name="relu6")
+
+    if fix_till_relu7:
+        net = mx.sym.Activation(data=net, act_type="relu", name="relu6", attr=lr_attr)
+    else:
+        net = mx.sym.Activation(data=net, act_type="relu", name="relu6")
     out["relu6"] = net
-    net = mx.sym.Dropout(data=net, p=0.5, name="drop6")
+
+    if fix_till_relu7:
+        net = mx.sym.Dropout(data=net, p=0.5, name="drop6", attr=lr_attr)
+    else:
+        net = mx.sym.Dropout(data=net, p=0.5, name="drop6")
     out["drop6"] = net
 
-    net = mx.sym.FullyConnected(data=net, num_hidden=4096, name="fc7")
+    if fix_till_relu7:
+        net = mx.sym.FullyConnected(data=net, num_hidden=4096, name="fc7", attr=lr_attr)
+    else:
+        net = mx.sym.FullyConnected(data=net, num_hidden=4096, name="fc7")
     out["fc7"] = net
-    net = mx.sym.Activation(data=net, act_type="relu", name="relu7")
+
+    if fix_till_relu7:
+        net = mx.sym.Activation(data=net, act_type="relu", name="relu7", attr=lr_attr)
+    else:
+        net = mx.sym.Activation(data=net, act_type="relu", name="relu7")
     out["relu7"] = net
+
     net = mx.sym.Dropout(data=net, p=0.5, name="drop7")
     out["drop7"] = net
 
@@ -142,16 +195,14 @@ def get_vgg16(data,
 
 def get_cnn(
         num_cls,
-        for_training=False,
-        **kargs):
+        fix_till_relu7=False):
     """ get model with only one CNN module (VGG16)
     Parameters
     ----------------------------
     num_cls : int
         number of classes
-    for_training : bool
-    kargs : {}
-        optional parameters
+    fix_till_relu7 : bool
+        whether to fix layers till relu7
 
     Return
     ----------------------------
@@ -167,15 +218,9 @@ def get_cnn(
     """
     return get_vgg16(
         data=net,
-        num_classes=num_cls
+        num_classes=num_cls,
+        fix_till_relu7=fix_till_relu7
     )["softmax"]
-
-    # TODO : still not sure how to make the two losses in paper ...
-    feature = get_vgg16(
-        data=net,
-        num_classes=num_cls
-    )["relu7"]
-    loss = []
 
 
 def get_cnn_rnn_attention(
@@ -183,7 +228,9 @@ def get_cnn_rnn_attention(
         for_training,
         rnn_dropout,
         rnn_hidden,
-        rnn_window):
+        rnn_window,
+        fix_till_relu7=False
+):
     """ get model with CNN + RNN + attention
     Parameters
     ----------------------------
@@ -196,7 +243,8 @@ def get_cnn_rnn_attention(
         number of hidden units of each RNN unit
     rnn_window: int
         number of timesteps
-    kargs: {}
+    fix_till_relu7: bool
+        whether to fix CNN feature extracting part
 
     Return
     -----------------------------
@@ -227,6 +275,7 @@ def get_cnn_rnn_attention(
     feature = get_vgg16(
         data=net,
         num_classes=num_cls,
+        fix_till_relu7=fix_till_relu7
     )["relu7"]
 
     loss = []
