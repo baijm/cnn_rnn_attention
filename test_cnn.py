@@ -7,8 +7,6 @@ import numpy as np
 import scipy.io
 import time
 import os
-import sys
-import datetime
 import argparse
 import csv
 
@@ -76,9 +74,6 @@ if __name__ == "__main__":
     model_epoch = int(args.model_epoch)
     gpu_id = args.gpu_id
 
-    bbox_img_dir = os.path.join(bbox_dir, "rgb")
-    assert os.path.exists(bbox_img_dir)
-
 
     """
     load iname2cid_file
@@ -93,8 +88,6 @@ if __name__ == "__main__":
     print ""
 
     # bbox_dir and iname2cid_file should be in the same dir
-    assert os.path.dirname(bbox_dir) == os.path.dirname(iname2cid_file), "bbox_dir and iname2cid_file should be in the same directory"
-
     print "decrement_cid = {}".format(decrement_cid)
 
     print "res_dir = {}".format(res_dir),
@@ -149,7 +142,7 @@ if __name__ == "__main__":
     cid_list = [str(c) for c in cid_list]
 
     # result of each bbox
-    br_file = os.path.join(res_dir, res_prefix + "_bbox.csv")
+    br_file = os.path.join(res_dir, res_prefix + "_cls.csv")
     br_f = open(br_file, 'w')
     br_fields = ['iname', 'gt_cid', 'pred_cid'] + cid_list
     br_writer = csv.DictWriter(br_f, fieldnames=br_fields)
@@ -164,7 +157,7 @@ if __name__ == "__main__":
 
         # load and preprocess image
         windows = my_util.preprocess(
-            img_dir=bbox_img_dir,
+            img_dir=bbox_dir,
             img_name=iname,
             pre_crop_resize_length=my_constant.RESIZE_SIDE,
             mean_pixel=my_constant.MEAN_PIXEL_INT,

@@ -2,6 +2,7 @@
 checkpoints/
 results/
 utils/
+for_thesis/
 data_overlap_feature_single_att1_loss_bjm/
 *_bjm.py
 vgg_from_mxnet.py

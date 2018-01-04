@@ -75,7 +75,7 @@ if __name__ == "__main__":
     model_prefix = args.model_prefix
     model_epoch = int(args.model_epoch)
     res_dir = args.res_dir
-    res_prefix = args.res_prefix + '_' + str(model_epoch)
+    res_prefix = args.res_prefix
     gpu_id = args.gpu_id
 
 
@@ -87,15 +87,9 @@ if __name__ == "__main__":
     assert os.path.exists(bbox_dir), "directory not exist"
     print ""
 
-    bbox_img_dir = os.path.join(bbox_dir, "rgb")
-    assert os.path.exists(bbox_img_dir), "'rgb' subdirectory not exist"
-
     print "iname2cid_file = {} ".format(iname2cid_file),
     assert os.path.exists(iname2cid_file), "file not exist"
     print ""
-
-    # bbox_dir and iname2cid_file should be in the same dir
-    assert os.path.dirname(bbox_dir) == os.path.dirname(iname2cid_file), "bbox_dir and iname2cid_file should be in the same directory"
 
     num_cls = 200 if "CUB-200-2011" in bbox_dir else 37
     print "{} classes".format(num_cls)
@@ -195,7 +189,7 @@ if __name__ == "__main__":
     cid_list = [str(c) for c in cid_list]
 
     # result of each bbox
-    br_file = os.path.join(res_dir, res_prefix + "_bbox.csv")
+    br_file = os.path.join(res_dir, res_prefix + "_cls.csv")
     br_f = open(br_file, 'w')
     br_fields = ['iname', 'gt_cid', 'pred_cid'] + cid_list
     br_writer = csv.DictWriter(br_f, fieldnames=br_fields)
@@ -210,7 +204,7 @@ if __name__ == "__main__":
 
         # load and preprocess image
         windows = my_util.preprocess(
-            img_dir=bbox_img_dir,
+            img_dir=bbox_dir,
             img_name=iname,
             pre_crop_resize_length=my_constant.RESIZE_SIDE,
             mean_pixel=my_constant.MEAN_PIXEL_INT,
