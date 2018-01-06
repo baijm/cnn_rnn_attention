@@ -1,4 +1,4 @@
-# train CNN from public model
+# train RNN from CNN
 /home/bjm/environments/mxnet_python2/bin/python train.py \
 --dataset_root_dir=/media/bjm/Data/datasets/fine_grained/Oxford-IIIT-Pet_cub-aug-coco \
 --train_iname2cid_file=train_1000_iname2cid.txt \
