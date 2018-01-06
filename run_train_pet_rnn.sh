@@ -1,5 +1,6 @@
 # train RNN from CNN
-/home/bjm/environments/mxnet_python2/bin/python train.py \
+# batch_size = 4 for workstation
+nohup /home/bjm/environments/mxnet_python2/bin/python train.py \
 --dataset_root_dir=/media/bjm/Data/datasets/fine_grained/Oxford-IIIT-Pet_cub-aug-coco \
 --train_iname2cid_file=train_1000_iname2cid.txt \
 --test_iname2cid_file=test_iname2cid.txt \
@@ -13,4 +14,4 @@
 --train_cnn=0 \
 --train_rnn=1 \
 --num_epochs=100 \
---gpu_id=0 | tee pet_rnn_from_cnn8.log
+--gpu_id=0 > pet_rnn_from_cnn8.log 2>&1 &
