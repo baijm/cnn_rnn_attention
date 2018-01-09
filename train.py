@@ -47,6 +47,16 @@ if __name__ == "__main__":
                         type=str,
                         help="Directory to save checkpoints")
 
+    # whether cnn should be trained
+    # if train_rnn == True, cnn will be trained together if train_cnn == True, otherwise cnn part will be fixed
+    parser.add_argument("--train_cnn", required=True,
+                        type=int,
+                        help="train RNN+attention")
+    # whether rnn should be trained
+    parser.add_argument("--train_rnn", required=True,
+                        type=int,
+                        help="train CNN")
+
     # resume training or fine-tune public model
     parser.add_argument("--resume_training", required=True,
                         type=int,
@@ -72,15 +82,7 @@ if __name__ == "__main__":
                         type=int,
                         default=my_constant.IMG_PER_BATCH,
                         help="number of different images in a batch for training")
-    # whether cnn should be trained
-    # if train_rnn == True, cnn will be trained together if train_cnn == True, otherwise cnn part will be fixed
-    parser.add_argument("--train_cnn", required=True,
-                        type=int,
-                        help="train RNN+attention")
-    # whether rnn should be trained
-    parser.add_argument("--train_rnn", required=True,
-                        type=int,
-                        help="train CNN")
+
     # number of epochs to train
     parser.add_argument("--num_epochs", required=False,
                         type=int,

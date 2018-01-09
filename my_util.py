@@ -246,7 +246,7 @@ def preprocess(img_dir, img_name, pre_crop_resize_length, mean_pixel, window_siz
     """
 
     img_file = os.path.join(img_dir, img_name + ".jpg")
-    assert os.path.exists(img_file), "image file {} not exist".img_file
+    assert os.path.exists(img_file), "image file {} not exist".format(img_file)
 
     # load image
     img_orig = Image.open(img_file)
