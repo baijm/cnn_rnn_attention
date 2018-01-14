@@ -268,13 +268,6 @@ def get_cnn_rnn_attention(
                                         my_constant.INPUT_CHANNEL,
                                         my_constant.INPUT_SIDE, my_constant.INPUT_SIDE))
 
-    # add batchnorm as in symbol_overlap_feature_single_att1_loss_bjm.py
-    net = mx.symbol.BatchNorm(
-        name="data_bn",
-        data=net,
-        fix_gamma=False
-    )
-
     """
     CNN module
     """

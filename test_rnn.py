@@ -134,8 +134,6 @@ if __name__ == "__main__":
         rnn_window=my_constant.NUM_RNN_WINDOW
     )
     print "done\n"
-    print symbol.list_arguments()
-    print symbol.list_outputs()
 
 
     """
