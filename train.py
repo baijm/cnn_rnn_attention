@@ -149,7 +149,7 @@ if __name__ == "__main__":
     print "####################\n# CONFIG\n####################"
     # dataset
     print "dataset :"
-    dataset_img_dir = os.path.join(dataset_root_dir, "gt", "by_bbox", "rgb_masked")
+    dataset_img_dir = os.path.join(dataset_root_dir, "gt", "by_bbox", "rgb")
     print "\twindow_path = {}".format(dataset_img_dir)
     dataset_name = dataset_root_dir.split('/')[-1]
     print "\tname = {}".format(dataset_name)
