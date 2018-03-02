@@ -149,11 +149,18 @@ if __name__ == "__main__":
     print "####################\n# CONFIG\n####################"
     # dataset
     print "dataset :"
-    dataset_img_dir = os.path.join(dataset_root_dir, "gt", "by_bbox", "rgb")
+    dataset_img_dir = os.path.join(dataset_root_dir, "gt", "by_bbox", "rgb_masked")
     print "\twindow_path = {}".format(dataset_img_dir)
     dataset_name = dataset_root_dir.split('/')[-1]
     print "\tname = {}".format(dataset_name)
-    dataset_num_cls = 200 if "CUB-200-2011" in dataset_name else 37
+    if "CUB-200-2011" in dataset_name:
+        dataset_num_cls = 200
+    elif "Pet" in dataset_name:
+        dataset_num_cls = 37
+    elif "Flower-13" in dataset_name:
+        dataset_num_cls = 13
+    else:
+        sys.exit(1)
     print "\tnum_cls = {}".format(dataset_num_cls)
 
     # device
